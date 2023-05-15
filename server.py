@@ -1,56 +1,100 @@
 import json
 import random
-import socket
-import time
+from flask import Flask, render_template, request
+from flask_socketio import SocketIO, emit
 
-# Server configuration
-HOST = 'localhost'
-PORT = 12345
-Buffersize = 1024
+app = Flask(__name__)
+socketio = SocketIO(app)
 
-# Load words from JSON file
-def loadJSON():
-    with open('words_list.json') as f:
+player_scores = {}
+word = ""
+unrevealed_word = ""
+
+def load_words():
+    with open("word_list.json") as f:
         words = json.load(f)
     return words
 
-# Select words
-def select_words(words):
+def select_word(words):
     return random.choice(words)
 
-# Generate the initial unrevealed word string
-def generate_unrevealed_word(word):
-    return ''.join(['-' if c != ' ' else ' ' for c in word])
+def generate_unrevealed_word(word_slice):
+    word = word_slice['word_entry']
+    return "".join(["-" if c != " " else " " for c in word])
 
-# Handle player guesses
 def handle_guess(guess, word, unrevealed_word):
-    if guess in word:
-        for i, c in enumerate(word):
-            if c == guess:
-                unrevealed_word = unrevealed_word[:i] + guess + unrevealed_word[i+1:]
-        return unrevealed_word, True
+    guess_lower = guess.lower()
+    word_lower = word.lower()
+    new_unrevealed_word = unrevealed_word
+
+    if guess_lower in word_lower:
+        for i, c in enumerate(word_lower):
+            if c == guess_lower:
+                new_unrevealed_word = new_unrevealed_word[:i] + word[i] + new_unrevealed_word[i + 1 :]
+        return new_unrevealed_word, True
     else:
-        return unrevealed_word, False
+        return new_unrevealed_word, False
+
+
+
+@app.route("/")
+def game_page():
+    return render_template("game.html")
+
+@socketio.on("connect")
+def handle_connect():
+    global player_id
+    player_id = request.sid
+    player_scores[player_id] = 0
+    print("A player connected")
     
+    # Send initial game state to the connected player
+    emit(
+        "update",
+        {
+            "unrevealed_word": unrevealed_word,
+            "is_correct": None,
+            "score": None,
+            "player_id": player_id,
+        },
+        room=player_id,
+    )
 
-UDPServerSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+@socketio.on("guess")
+def handle_guess_event(data):
+    global word
+    global unrevealed_word
+    
+    guess = data["guess"].strip().lower()
+    if guess == "ready":
+        print("Player is ready")
+        return
 
-UDPServerSocket.bind((localIP, localPort))
-print("UDP server up and listening")
+    unrevealed_word, is_correct = handle_guess(guess, word['word_entry'], unrevealed_word)
 
-while True:
-    bytesAddressPair = UDPServerSocket.recvfrom(bufferSize)
+    score_multiplier = 0
+    if is_correct:
+        # Calculate the score
+        score_multiplier = 100 * word['word_entry'].count(guess)
+        player_scores[player_id] += score_multiplier
 
-    message = bytesAddressPair[0]
+    if "-" not in unrevealed_word:
+        print(f"Word revealed: {word}")
+        # Handle game completion here
 
-    address = bytesAddressPair[1]
+    # Send the updated game state to all players
+    emit(
+        "update",
+        {
+            "unrevealed_word": unrevealed_word,
+            "is_correct": is_correct,
+            "score": score_multiplier,
+        },
+    )
 
-    print(message)
-    clientMsg = "Message from Client:{}".format(message)
-    clientIP = "Client IP Address:{}".format(address)
+if __name__ == "__main__":
+    words = load_words()
+    word = select_word(words)
+    unrevealed_word = generate_unrevealed_word(word)
 
-    print(clientMsg)
-    print(clientIP)
-
-    UDPServerSocket.sendto(bytesToSend, address)
-
+    socketio.run(app, debug=True)

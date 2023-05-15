@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Wonder Words Game</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.0/socket.io.js"></script>
+  <script>
+    var socket = io.connect('http://localhost:5000');
+    
+    socket.on('connect', function(data) {
+      console.log('Connected to the server');
+      player = document.getElementById('player_id')
+    });
+    
+    socket.on('update', function(data) {
+      console.log('Received update:', data);
+      updateUnrevealedWord(data.unrevealed_word);
+      // Handle the received update data
+    });
+    
+    function sendGuess() {
+      var guess = document.getElementById('guess-input').value;
+      socket.emit('guess', { guess: guess });
+    }
+    
+    function updateUnrevealedWord(unrevealedWord) {
+      var wordElement = document.getElementById('word');
+      wordElement.textContent = unrevealedWord;
+    }
+  </script>
+</head>
+<body>
+  <div>
+  <h1>Wonder Words Game</h1>
+  <p>Guess the word by entering a letter:</p>
+  <input type="text" id="guess-input">
+  <button onclick="sendGuess()">Guess</button>
+  <p>Unrevealed Word: <span id="word"></span></p>
+  <p>Current players:  <span id="player_id"></span></p>
+  </div>
+</body>
+</html>
