@@ -1,41 +1,102 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>Wonder Words Game</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.0/socket.io.js"></script>
-  <script>
-    var socket = io.connect('http://localhost:5000');
-    
-    socket.on('connect', function(data) {
-      console.log('Connected to the server');
-      player = document.getElementById('player_id')
-    });
-    
-    socket.on('update', function(data) {
-      console.log('Received update:', data);
-      updateUnrevealedWord(data.unrevealed_word);
-      // Handle the received update data
-    });
-    
-    function sendGuess() {
-      var guess = document.getElementById('guess-input').value;
-      socket.emit('guess', { guess: guess });
-    }
-    
-    function updateUnrevealedWord(unrevealedWord) {
-      var wordElement = document.getElementById('word');
-      wordElement.textContent = unrevealedWord;
-    }
-  </script>
-</head>
-<body>
-  <div>
-  <h1>Wonder Words Game</h1>
-  <p>Guess the word by entering a letter:</p>
-  <input type="text" id="guess-input">
-  <button onclick="sendGuess()">Guess</button>
-  <p>Unrevealed Word: <span id="word"></span></p>
-  <p>Current players:  <span id="player_id"></span></p>
-  </div>
-</body>
+  <head>
+    <title>Wonder Words Game</title>
+    <style>
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+
+      .container {
+        text-align: center;
+      }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.0/socket.io.js"></script>
+    <script>
+      var socket = io.connect("http://localhost:5000");
+
+      socket.on("connect", function (data) {
+        console.log("Connected to the server");
+        player = document.getElementById("player-id");
+      });
+
+      socket.on("start_game", function (data) {
+        console.log("Started game:", data);
+        if (data && data.player_name) {
+          localStorage.setItem("player_name", data.player_name);
+          document.getElementById("playerName").textContent = data.player_name;
+        }
+      });
+
+      socket.on("update", function (data) {
+        console.log("Received update:", data);
+        updateGameState(data);
+      });
+
+      socket.on("win", function () {
+        console.log("You won the game!");
+        document.getElementById("game-status").textContent =
+          "Congratulations! You won the game!";
+      });
+
+      socket.on("wrong", function () {
+        document.getElementById("game-status").textContent =
+          "Wrong Guess! Try Again!";
+      });
+
+      function sendGuess() {
+        var guess = document.getElementById("guess-input").value;
+        socket.emit("guess", { guess: guess });
+        document.getElementById("guess-input").value = "";
+        document.getElementById("game-status").textContent = "";
+      }
+
+      function updateGameState(data) {
+        updateUnrevealedWord(data.unrevealed_word);
+        updateDesc(data.desc);
+        updateScore(data.score);
+      }
+
+      function updateUnrevealedWord(unrevealedWord) {
+        var wordElement = document.getElementById("word");
+        wordElement.textContent = unrevealedWord;
+      }
+
+      function updateDesc(desc) {
+        var descElement = document.getElementById("desc");
+        descElement.textContent = desc;
+      }
+
+      function updateScore(score) {
+        var scoreElement = document.getElementById("score");
+        scoreElement.textContent = score;
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+        var playerName = localStorage.getItem("player_name");
+        if (playerName) {
+          document.getElementById("playerName").textContent = playerName;
+          console.log("Player name in local storage:", playerName);
+        } else {
+          console.log("Player name not found in local storage.");
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Wonder Words Game</h1>
+      <p>Description: <span id="desc"> </span></p>
+      <p>Unrevealed Word: <span id="word"></span></p>
+      <p>Guess the word by entering a letter:</p>
+      <input type="text" id="guess-input" />
+      <button onclick="sendGuess()">Guess</button>
+      <p>Player Name: <span id="playerName"></span></p>
+      <p>Current player Score: <span id="score"></span></p>
+      <p id="game-status"></p>
+    </div>
+  </body>
 </html>
