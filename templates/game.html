@@ -24,8 +24,15 @@
 
       socket.on("connect", function (data) {
         console.log("Connected to the server");
-        socket.emit("load_home_page");
       });
+
+      function registerName() {
+        var playerName = document.getElementById("playerNameInput").value;
+        socket.emit("register_name", { name: playerName });
+        document.getElementById("playerNameInput").value = "";
+        document.getElementById("name-registration").classList.add("hidden");
+        document.getElementById("game-content").classList.remove("hidden");
+      }
 
       socket.on("update", function (data) {
         console.log("Received update:", data);
@@ -94,15 +101,24 @@
   </head>
   <body>
     <div class="container">
-      <h1>Wonder Words Game</h1>
-      <p>Description: <span id="desc"> </span></p>
-      <p>Unrevealed Word: <span id="word"></span></p>
-      <p>Guess the word by entering a letter:</p>
-      <input type="text" id="guess-input" />
-      <button id="guess-button" onclick="sendGuess()">Guess</button>
-      <p>Player Name: <span id="playerName"></span></p>
-      <p>Current player Score: <span id="score"></span></p>
-      <p id="game-status"></p>
+      <div id="name-registration">
+        <h1>Wonder Words Game</h1>
+        <p>Enter your name to register:</p>
+        <input type="text" id="playerNameInput" />
+        <button onclick="registerName()">Register</button>
+      </div>
+
+      <div id="game-content" class="hidden">
+        <h1>Wonder Words Game</h1>
+        <p>Description: <span id="desc"> </span></p>
+        <p>Unrevealed Word: <span id="word"></span></p>
+        <p>Guess the word by entering a letter:</p>
+        <input type="text" id="guess-input" />
+        <button id="guess-button" onclick="sendGuess()">Guess</button>
+        <p>Player Name: <span id="playerName"></span></p>
+        <p>Current player Score: <span id="score"></span></p>
+        <p id="game-status"></p>
+      </div>
     </div>
   </body>
 </html>

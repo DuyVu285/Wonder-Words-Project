@@ -6,6 +6,7 @@ from flask_socketio import SocketIO, emit
 app = Flask(__name__)
 socketio = SocketIO(app)
 
+words = []
 word = ""
 unrevealed_word = ""
 player_names = {}
@@ -42,49 +43,41 @@ def handle_guess(guess, word, unrevealed_word):
         return new_unrevealed_word, False
 
 
-@app.route("/home")
+@app.route("/")
 def home():
-    return render_template("home.html")
+    return render_template("game.html")
 
-
-@app.route("/start_game", methods=["POST"])
-def start_game():
-    player_name = request.form.get("name")
-    if player_name:
-        player_names[request.sid] = player_name
-        player_scores[request.sid] = 0
-        return redirect("/game?sid={}&player_name={}".format(request.sid, player_name))
-    else:
-        return redirect("/")
-    
-@app.route("/game")
-def game():
-    sid = request.args.get("sid")
-    player_name = request.args.get("player_name")
-    if sid and player_name:
-        return render_template("game.html", sid=sid, player_name=player_name)
-    else:
-        return redirect("/")
 
 @socketio.on("connect")
 def handle_connect():
     print("A player connected")
-
-    if request.sid not in player_names:
-        player_names[request.sid] = None
-
-    player_scores[request.sid] = 0
-
-    print(player_names)
-    print(player_scores)
+    
     emit(
         "update",
         {
             "unrevealed_word": unrevealed_word,
             "is_correct": None,
-            "score": player_scores[request.sid],
+            "score": player_scores.get(request.sid, 0),
             "desc": word["description"],
-            "player_name": player_names[request.sid],
+            "player_name": player_names.get(request.sid),
+        },
+        room=request.sid,
+    )
+
+    update_players()
+
+
+@socketio.on("register_name")
+def register_name(data):
+    player_names[request.sid] = data["name"]
+    emit(
+        "update",
+        {
+            "unrevealed_word": unrevealed_word,
+            "is_correct": None,
+            "score": player_scores.get(request.sid, 0),
+            "desc": word["description"],
+            "player_name": player_names.get(request.sid),
         },
         room=request.sid,
     )
@@ -99,7 +92,7 @@ def update(data):
         {
             "unrevealed_word": unrevealed_word,
             "is_correct": None,
-            "score": player_scores[request.sid],
+            "score": player_scores.get(request.sid, 0),
             "desc": word["description"],
             "player_name": player_names.get(request.sid),
         },
@@ -124,7 +117,7 @@ def handle_guess_event(data):
     score_multiplier = 0
     if is_correct:
         score_multiplier = 100 * word["word_entry"].lower().count(guess)
-        player_scores[request.sid] += score_multiplier
+        player_scores[request.sid] = player_scores.get(request.sid, 0) + score_multiplier
 
     if not is_correct:
         socketio.emit("wrong", room=request.sid)
@@ -138,13 +131,11 @@ def handle_guess_event(data):
         {
             "unrevealed_word": unrevealed_word,
             "is_correct": is_correct,
-            "score": player_scores[request.sid],
+            "score": player_scores.get(request.sid, 0),
             "desc": word["description"],
             "player_name": player_names.get(request.sid),
         },
     )
-    print("score", player_scores)
-    print(player_names)
 
     update_players()
 
