@@ -7,7 +7,7 @@ sio = socketio.Client()
 def handle_connect():
     print('Connected to the server')
     # Open home.html in a web browser
-    webbrowser.open('http://localhost:5000')
+    webbrowser.open('http://localhost:5000/home')
 
 @sio.on('disconnect')
 def handle_disconnect():

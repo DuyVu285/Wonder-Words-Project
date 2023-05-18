@@ -13,6 +13,10 @@
       .container {
         text-align: center;
       }
+
+      .hidden {
+        display: none;
+      }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.0/socket.io.js"></script>
     <script>
@@ -20,15 +24,7 @@
 
       socket.on("connect", function (data) {
         console.log("Connected to the server");
-        player = document.getElementById("player-id");
-      });
-
-      socket.on("start_game", function (data) {
-        console.log("Started game:", data);
-        if (data && data.player_name) {
-          localStorage.setItem("player_name", data.player_name);
-          document.getElementById("playerName").textContent = data.player_name;
-        }
+        socket.emit("load_home_page");
       });
 
       socket.on("update", function (data) {
@@ -36,16 +32,33 @@
         updateGameState(data);
       });
 
+      function updatePlayerName(playerName) {
+        var playerElement = document.getElementById("playerName");
+        playerElement.textContent = playerName;
+      }
+
+      // Game Condition
+
       socket.on("win", function () {
         console.log("You won the game!");
         document.getElementById("game-status").textContent =
           "Congratulations! You won the game!";
+        alert("Congratulations! You won the game!");
+
+        // Hide input and button
+        var input = document.getElementById("guess-input");
+        var button = document.getElementById("guess-button");
+        input.classList.add("hidden");
+        button.classList.add("hidden");
       });
 
       socket.on("wrong", function () {
         document.getElementById("game-status").textContent =
           "Wrong Guess! Try Again!";
+        alert("Wrong Guess! Try Again!");
       });
+
+      // Guess
 
       function sendGuess() {
         var guess = document.getElementById("guess-input").value;
@@ -54,10 +67,13 @@
         document.getElementById("game-status").textContent = "";
       }
 
+      // Update Game State
+
       function updateGameState(data) {
         updateUnrevealedWord(data.unrevealed_word);
         updateDesc(data.desc);
         updateScore(data.score);
+        updatePlayerName(data.player_name);
       }
 
       function updateUnrevealedWord(unrevealedWord) {
@@ -74,16 +90,6 @@
         var scoreElement = document.getElementById("score");
         scoreElement.textContent = score;
       }
-
-      document.addEventListener("DOMContentLoaded", function () {
-        var playerName = localStorage.getItem("player_name");
-        if (playerName) {
-          document.getElementById("playerName").textContent = playerName;
-          console.log("Player name in local storage:", playerName);
-        } else {
-          console.log("Player name not found in local storage.");
-        }
-      });
     </script>
   </head>
   <body>
@@ -93,7 +99,7 @@
       <p>Unrevealed Word: <span id="word"></span></p>
       <p>Guess the word by entering a letter:</p>
       <input type="text" id="guess-input" />
-      <button onclick="sendGuess()">Guess</button>
+      <button id="guess-button" onclick="sendGuess()">Guess</button>
       <p>Player Name: <span id="playerName"></span></p>
       <p>Current player Score: <span id="score"></span></p>
       <p id="game-status"></p>
