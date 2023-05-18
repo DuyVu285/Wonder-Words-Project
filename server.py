@@ -1,6 +1,6 @@
 import json
 import random
-from flask import Flask, redirect, render_template, request
+from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
@@ -9,8 +9,8 @@ socketio = SocketIO(app)
 words = []
 word = ""
 unrevealed_word = ""
-player_names = {}
-player_scores = {}
+players = {}
+
 
 def load_words():
     with open("word_list.json") as f:
@@ -50,60 +50,33 @@ def home():
 
 @socketio.on("connect")
 def handle_connect():
-    print("A player connected")
-    
+    player_id = request.sid
+    if player_id not in players:
+        players[player_id] = {"name": None, "score": 0}
+        emit("prompt_register_name", room=player_id)
+    emit("update", get_game_data(player_id), room=player_id)
     emit(
-        "update",
-        {
-            "unrevealed_word": unrevealed_word,
-            "is_correct": None,
-            "score": player_scores.get(request.sid, 0),
-            "desc": word["description"],
-            "player_name": player_names.get(request.sid),
-        },
-        room=request.sid,
-    )
-
-    update_players()
+        "update_players", get_players_data(), room=player_id
+    )  # Send player list to the newly connected player only
 
 
 @socketio.on("register_name")
 def register_name(data):
-    player_names[request.sid] = data["name"]
-    emit(
-        "update",
-        {
-            "unrevealed_word": unrevealed_word,
-            "is_correct": None,
-            "score": player_scores.get(request.sid, 0),
-            "desc": word["description"],
-            "player_name": player_names.get(request.sid),
-        },
-        room=request.sid,
-    )
-
-    update_players()
-
-
-@socketio.on("update")
-def update(data):
-    emit(
-        "update",
-        {
-            "unrevealed_word": unrevealed_word,
-            "is_correct": None,
-            "score": player_scores.get(request.sid, 0),
-            "desc": word["description"],
-            "player_name": player_names.get(request.sid),
-        },
-        room=request.sid,
-    )
+    player_id = request.sid
+    players[player_id]["name"] = data["name"]
+    emit("update_players", get_players_data(), broadcast=True)
 
 
 @socketio.on("guess")
 def handle_guess_event(data):
     global word
     global unrevealed_word
+
+    player_id = request.sid
+    player_data = players.get(player_id, {})
+    if player_data.get("name") is None:
+        emit("update", get_game_data(player_id), room=player_id)
+        return
 
     guess = data["guess"].strip().lower()
     if guess == "ready":
@@ -114,46 +87,34 @@ def handle_guess_event(data):
         guess, word["word_entry"], unrevealed_word
     )
 
-    score_multiplier = 0
     if is_correct:
         score_multiplier = 100 * word["word_entry"].lower().count(guess)
-        player_scores[request.sid] = player_scores.get(request.sid, 0) + score_multiplier
-
-    if not is_correct:
-        socketio.emit("wrong", room=request.sid)
+        player_data["score"] += score_multiplier
+        emit("update_players", get_players_data(), broadcast=True)
+    else:
+        emit("wrong", room=player_id)
 
     if "-" not in unrevealed_word:
         print(f"Word revealed: {word}")
-        socketio.emit("win", room=request.sid)
+        emit("win", room=player_id)
 
-    emit(
-        "update",
-        {
-            "unrevealed_word": unrevealed_word,
-            "is_correct": is_correct,
-            "score": player_scores.get(request.sid, 0),
-            "desc": word["description"],
-            "player_name": player_names.get(request.sid),
-        },
-    )
-
-    update_players()
+    emit("update", get_game_data(player_id), broadcast=True)
 
 
-def update_players():
-    for sid in list(player_scores.keys()):
-        if sid not in player_names:
-            del player_scores[sid]
+def get_game_data(player_id):
+    return {
+        "unrevealed_word": unrevealed_word,
+        "is_correct": None,
+        "score": players.get(player_id, {}).get("score", 0),
+        "desc": word["description"],
+    }
 
-    for sid in player_scores:
-        emit(
-            "update_players",
-            {
-                "player_names": list(player_names.values()),
-                "player_scores": list(player_scores.values()),
-            },
-            room=sid,
-        )
+
+def get_players_data():
+    return {
+        "player_names": [player["name"] for player in players.values()],
+        "player_scores": [player["score"] for player in players.values()],
+    }
 
 
 if __name__ == "__main__":

@@ -24,14 +24,50 @@
 
       socket.on("connect", function (data) {
         console.log("Connected to the server");
+        checkPlayerNameRegistration();
       });
+
+      function checkPlayerNameRegistration() {
+        var playerName = localStorage.getItem("playerName");
+        if (playerName) {
+          promptForPlayerName();
+        } else {
+          showNameRegistration();
+        }
+      }
+
+      function showNameRegistration() {
+        document.getElementById("name-registration").classList.remove("hidden");
+        document.getElementById("game-content").classList.add("hidden");
+      }
+
+      function promptForPlayerName() {
+        var playerName = localStorage.getItem("playerName");
+        var confirmRegistration = confirm(
+          "You already registered as " +
+            playerName +
+            ". Do you want to register a new player name?"
+        );
+
+        if (confirmRegistration) {
+          localStorage.removeItem("playerName");
+          showNameRegistration();
+        } else {
+          socket.emit("register_name", { name: playerName });
+          document.getElementById("playerNameInput").value = playerName;
+          document.getElementById("name-registration").classList.add("hidden");
+          document.getElementById("game-content").classList.remove("hidden");
+        }
+      }
 
       function registerName() {
         var playerName = document.getElementById("playerNameInput").value;
+        localStorage.setItem("playerName", playerName);
         socket.emit("register_name", { name: playerName });
         document.getElementById("playerNameInput").value = "";
         document.getElementById("name-registration").classList.add("hidden");
         document.getElementById("game-content").classList.remove("hidden");
+        updatePlayerName(playerName)
       }
 
       socket.on("update", function (data) {
@@ -39,9 +75,24 @@
         updateGameState(data);
       });
 
+      socket.on("update_players", function (data) {
+        console.log("Received players update:", data);
+        updatePlayersList(data.player_names);
+      });
+
+      function updatePlayersList(playerNames) {
+        var playerListElement = document.getElementById("playerList");
+        playerListElement.innerHTML = "";
+        playerNames.forEach(function (name) {
+          var listItem = document.createElement("li");
+          listItem.textContent = name;
+          playerListElement.appendChild(listItem);
+        });
+      }
+
       function updatePlayerName(playerName) {
-        var playerElement = document.getElementById("playerName");
-        playerElement.textContent = playerName;
+        var playerNameElement = document.getElementById("playerName");
+        playerNameElement.textContent = playerName;
       }
 
       // Game Condition
@@ -80,7 +131,6 @@
         updateUnrevealedWord(data.unrevealed_word);
         updateDesc(data.desc);
         updateScore(data.score);
-        updatePlayerName(data.player_name);
       }
 
       function updateUnrevealedWord(unrevealedWord) {
@@ -117,6 +167,8 @@
         <button id="guess-button" onclick="sendGuess()">Guess</button>
         <p>Player Name: <span id="playerName"></span></p>
         <p>Current player Score: <span id="score"></span></p>
+        <p>Player Names:</p>
+        <ul id="playerList"></ul>
         <p id="game-status"></p>
       </div>
     </div>
