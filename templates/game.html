@@ -22,111 +22,27 @@
     <script>
       var socket = io.connect("http://localhost:5000");
 
+      // Connect and Register Name
       socket.on("connect", function (data) {
         console.log("Connected to the server");
-        checkPlayerNameRegistration();
       });
-
-      function checkPlayerNameRegistration() {
-        var playerName = localStorage.getItem("playerName");
-        if (playerName) {
-          promptForPlayerName();
-        } else {
-          showNameRegistration();
-        }
-      }
-
-      function showNameRegistration() {
-        document.getElementById("name-registration").classList.remove("hidden");
-        document.getElementById("game-content").classList.add("hidden");
-      }
-
-      function promptForPlayerName() {
-        var playerName = localStorage.getItem("playerName");
-        var confirmRegistration = confirm(
-          "You already registered as " +
-            playerName +
-            ". Do you want to register a new player name?"
-        );
-
-        if (confirmRegistration) {
-          localStorage.removeItem("playerName");
-          showNameRegistration();
-        } else {
-          socket.emit("register_name", { name: playerName });
-          document.getElementById("playerNameInput").value = playerName;
-          document.getElementById("name-registration").classList.add("hidden");
-          document.getElementById("game-content").classList.remove("hidden");
-        }
-      }
 
       function registerName() {
         var playerName = document.getElementById("playerNameInput").value;
-        localStorage.setItem("playerName", playerName);
         socket.emit("register_name", { name: playerName });
         document.getElementById("playerNameInput").value = "";
         document.getElementById("name-registration").classList.add("hidden");
         document.getElementById("game-content").classList.remove("hidden");
-        updatePlayerName(playerName)
+        updatePlayerName(playerName);
       }
 
+      // Update data
       socket.on("update", function (data) {
         console.log("Received update:", data);
         updateGameState(data);
       });
 
-      socket.on("update_players", function (data) {
-        console.log("Received players update:", data);
-        updatePlayersList(data.player_names);
-      });
-
-      function updatePlayersList(playerNames) {
-        var playerListElement = document.getElementById("playerList");
-        playerListElement.innerHTML = "";
-        playerNames.forEach(function (name) {
-          var listItem = document.createElement("li");
-          listItem.textContent = name;
-          playerListElement.appendChild(listItem);
-        });
-      }
-
-      function updatePlayerName(playerName) {
-        var playerNameElement = document.getElementById("playerName");
-        playerNameElement.textContent = playerName;
-      }
-
-      // Game Condition
-
-      socket.on("win", function () {
-        console.log("You won the game!");
-        document.getElementById("game-status").textContent =
-          "Congratulations! You won the game!";
-        alert("Congratulations! You won the game!");
-
-        // Hide input and button
-        var input = document.getElementById("guess-input");
-        var button = document.getElementById("guess-button");
-        input.classList.add("hidden");
-        button.classList.add("hidden");
-      });
-
-      socket.on("wrong", function () {
-        document.getElementById("game-status").textContent =
-          "Wrong Guess! Try Again!";
-        alert("Wrong Guess! Try Again!");
-      });
-
-      // Guess
-
-      function sendGuess() {
-        var guess = document.getElementById("guess-input").value;
-        socket.emit("guess", { guess: guess });
-        document.getElementById("guess-input").value = "";
-        document.getElementById("game-status").textContent = "";
-      }
-
       // Update Game State
-
       function updateGameState(data) {
         updateUnrevealedWord(data.unrevealed_word);
         updateDesc(data.desc);
@@ -147,6 +63,55 @@
         var scoreElement = document.getElementById("score");
         scoreElement.textContent = score;
       }
+
+      // Update playerList
+      socket.on("update_players", function (data) {
+        console.log("Received players update:", data);
+        updatePlayersList(data.player_names);
+      });
+
+      function updatePlayersList(playerNames) {
+        var playerListElement = document.getElementById("playerList");
+        playerListElement.innerHTML = "";
+        playerNames.forEach(function (name) {
+          var listItem = document.createElement("li");
+          listItem.textContent = name;
+          playerListElement.appendChild(listItem);
+        });
+      }
+
+      // Update PlayerName
+      function updatePlayerName(playerName) {
+        var playerNameElement = document.getElementById("playerName");
+        playerNameElement.textContent = playerName;
+      }
+
+      // Game Condition
+      socket.on("win", function () {
+        console.log("You won the game!");
+        document.getElementById("game-status").textContent =
+          "Congratulations! You won the game!";
+        alert("Congratulations! You won the game!");
+
+        // Hide input and button
+        var input = document.getElementById("guess-input");
+        var button = document.getElementById("guess-button");
+        input.classList.add("hidden");
+        button.classList.add("hidden");
+      });
+
+      socket.on("wrong", function () {
+        document.getElementById("game-status").textContent =
+          "Wrong Guess!";
+        alert("Wrong Guess! Next Player!");
+      });
+
+      // Guess
+      function sendGuess() {
+        var guess = document.getElementById("guess-input").value;
+        socket.emit("guess", { guess: guess });
+        document.getElementById("guess-input").value = "";
+      }
     </script>
   </head>
   <body>
@@ -157,7 +122,6 @@
         <input type="text" id="playerNameInput" />
         <button onclick="registerName()">Register</button>
       </div>
-
       <div id="game-content" class="hidden">
         <h1>Wonder Words Game</h1>
         <p>Description: <span id="desc"> </span></p>

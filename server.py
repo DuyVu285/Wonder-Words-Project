@@ -51,15 +51,12 @@ def home():
 @socketio.on("connect")
 def handle_connect():
     player_id = request.sid
-    if player_id not in players:
-        players[player_id] = {"name": None, "score": 0}
-        emit("prompt_register_name", room=player_id)
-    emit("update", get_game_data(player_id), room=player_id)
-    emit(
-        "update_players", get_players_data(), room=player_id
-    )  # Send player list to the newly connected player only
+    print("Player with ",player_id, " connected")
+
+# Note: Create a new ready socketio
 
 
+# Get player name
 @socketio.on("register_name")
 def register_name(data):
     player_id = request.sid
@@ -67,6 +64,14 @@ def register_name(data):
     emit("update_players", get_players_data(), broadcast=True)
 
 
+def get_players_data():
+    return {
+        "player_names": [player["name"] for player in players.values()],
+        "player_scores": [player["score"] for player in players.values()],
+    }
+
+
+# Guess
 @socketio.on("guess")
 def handle_guess_event(data):
     global word
@@ -74,14 +79,11 @@ def handle_guess_event(data):
 
     player_id = request.sid
     player_data = players.get(player_id, {})
-    if player_data.get("name") is None:
-        emit("update", get_game_data(player_id), room=player_id)
-        return
 
     guess = data["guess"].strip().lower()
     if guess == "ready":
         print("Player is ready")
-        return
+        return  # Note: Tomorrow, Create a new emit ready to check ready
 
     unrevealed_word, is_correct = handle_guess(
         guess, word["word_entry"], unrevealed_word
@@ -90,7 +92,7 @@ def handle_guess_event(data):
     if is_correct:
         score_multiplier = 100 * word["word_entry"].lower().count(guess)
         player_data["score"] += score_multiplier
-        emit("update_players", get_players_data(), broadcast=True)
+        emit("update", get_game_data(player_id), room=player_id) # Bug here which cause update to all players
     else:
         emit("wrong", room=player_id)
 
@@ -98,7 +100,7 @@ def handle_guess_event(data):
         print(f"Word revealed: {word}")
         emit("win", room=player_id)
 
-    emit("update", get_game_data(player_id), broadcast=True)
+    emit("update", get_game_data(player_id), broadcast=True) # Create a new type of update called updateAllPlayers
 
 
 def get_game_data(player_id):
@@ -107,13 +109,6 @@ def get_game_data(player_id):
         "is_correct": None,
         "score": players.get(player_id, {}).get("score", 0),
         "desc": word["description"],
-    }
-
-
-def get_players_data():
-    return {
-        "player_names": [player["name"] for player in players.values()],
-        "player_scores": [player["score"] for player in players.values()],
     }
 
 
