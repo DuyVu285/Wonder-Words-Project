@@ -1,4 +1,5 @@
 import json
+import time
 import random
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
@@ -10,6 +11,9 @@ words = []
 word = ""
 unrevealed_word = ""
 players = {}
+registration_order = []
+ready_players = 0
+turn = 0
 
 
 def load_words():
@@ -53,7 +57,18 @@ def handle_connect():
     player_id = request.sid
     print("Client ID: ", player_id, " connected")
 
-# Note: Create a new ready socketio
+
+# Ready
+@socketio.on("ready")
+def ready():
+    global word
+    global unrevealed_word
+    global ready_players
+
+    ready_players += 1
+
+    if ready_players >= 2:
+        emit("start_timer", get_players_data(), broadcast=True)
 
 
 # Get player name
@@ -63,8 +78,15 @@ def register_name(data):
     if player_id not in players:
         players[player_id] = {"name": None, "score": 0}
     players[player_id]["name"] = data["name"]
-    emit("update",get_game_data(player_id), room=player_id)
-    emit("update_players", get_players_data(), broadcast=True)
+    registration_order.append(data["name"])
+    emit("update_ready_players", get_players_data(), broadcast=True)
+
+
+def get_init_data(player_id):
+    return {
+        "score": players.get(player_id, {}).get("score", 0),
+    }
+
 
 def get_game_data(player_id):
     return {
@@ -74,9 +96,14 @@ def get_game_data(player_id):
         "desc": word["description"],
     }
 
+
 def get_players_data():
     return {
+        "unrevealed_word": unrevealed_word,
+        "desc": word["description"],
         "player_names": [player["name"] for player in players.values()],
+        "order": registration_order[0],
+        "turn": turn,
         "player_scores": [player["score"] for player in players.values()],
     }
 
@@ -86,14 +113,12 @@ def get_players_data():
 def handle_guess_event(data):
     global word
     global unrevealed_word
+    global turn
 
     player_id = request.sid
     player_data = players.get(player_id, {})
 
     guess = data["guess"].strip().lower()
-    if guess == "ready":
-        print("Player is ready")
-        return  # Note: Tomorrow, Create a new emit ready to check ready
 
     unrevealed_word, is_correct = handle_guess(
         guess, word["word_entry"], unrevealed_word
@@ -102,19 +127,23 @@ def handle_guess_event(data):
     if is_correct:
         score_multiplier = 100 * word["word_entry"].lower().count(guess)
         player_data["score"] += score_multiplier
-        emit(
-            "update", get_game_data(player_id), room=player_id
-        )  # Bug here which cause update to all players
+        emit("update", get_game_data(player_id), room=player_id)
     else:
+        next_turn()
         emit("wrong", room=player_id)
 
     if "-" not in unrevealed_word:
         print(f"Word revealed: {word}")
         emit("win", room=player_id)
 
-    emit(
-        "update", get_game_data(player_id), broadcast=True
-    )  # Create a new type of update called updateAllPlayers
+    emit("update_game_state", get_players_data(), broadcast=True)
+
+
+def next_turn():
+    global turn
+    turn = (turn + 1) % len(registration_order)
+    registration_order.append(registration_order.pop(0))
+    emit("update_turn", get_players_data(), broadcast=True)
 
 
 if __name__ == "__main__":

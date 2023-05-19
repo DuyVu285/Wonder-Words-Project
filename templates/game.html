@@ -22,24 +22,64 @@
     <script>
       var socket = io.connect("http://localhost:5000");
 
-      // Connect and Register Name
+      // Connect
       socket.on("connect", function (data) {
         console.log("Connected to the server");
       });
 
+      // Register Name
       function registerName() {
         var playerName = document.getElementById("playerNameInput").value;
         socket.emit("register_name", { name: playerName });
         document.getElementById("playerNameInput").value = "";
-        document.getElementById("name-registration").classList.add("hidden");
-        document.getElementById("game-content").classList.remove("hidden");
         updatePlayerName(playerName);
       }
+
+      // Ready check
+      function ready() {
+        socket.emit("ready");
+      }
+
+      // Timer
+      socket.on("start_timer", function (data) {
+        console.log("Timer starting...");
+        document.getElementById("name-registration").classList.add("hidden");
+        document.getElementById("game-content").classList.add("hidden");
+        document.getElementById("timer-message").classList.remove("hidden");
+
+        setTimeout(function () {
+          console.log("Timer finished. Game starting...");
+          document.getElementById("timer-message").classList.add("hidden");
+          document.getElementById("game-content").classList.remove("hidden");
+          updateGameState(data);
+          updateTurn(data);
+          updateScore(0);
+          updatePlayersList(data.player_names);
+        }, 3000);
+      });
 
       // Update data
       socket.on("update", function (data) {
         console.log("Received update:", data);
         updateGameState(data);
+        updateTurn(data);
+      });
+
+      socket.on("update_turn", function (data) {
+        console.log("Received turn update:", data);
+        updateTurn(data);
+      });
+
+      function updateTurn(data) {
+        var turnElement = document.getElementById("turn");
+        turnElement.textContent =
+          "Turn: " + (data.turn + 1) + " - " + data.order;
+      }
+
+      socket.on("update_game_state", function (data) {
+        console.log("Received update:", data);
+        updateUnrevealedWord(data.unrevealed_word);
+        updateDesc(data.desc);
       });
 
       // Update Game State
@@ -65,10 +105,20 @@
       }
 
       // Update playerList
-      socket.on("update_players", function (data) {
+      socket.on("update_ready_players", function (data) {
         console.log("Received players update:", data);
-        updatePlayersList(data.player_names);
+        updateStartPlayersList(data.player_names);
       });
+
+      function updateStartPlayersList(playerNames) {
+        var playerListElement = document.getElementById("startPlayerList");
+        playerListElement.innerHTML = "";
+        playerNames.forEach(function (name) {
+          var listItem = document.createElement("li");
+          listItem.textContent = name;
+          playerListElement.appendChild(listItem);
+        });
+      }
 
       function updatePlayersList(playerNames) {
         var playerListElement = document.getElementById("playerList");
@@ -101,8 +151,7 @@
       });
 
       socket.on("wrong", function () {
-        document.getElementById("game-status").textContent =
-          "Wrong Guess!";
+        document.getElementById("game-status").textContent = "Wrong Guess!";
         alert("Wrong Guess! Next Player!");
       });
 
@@ -121,7 +170,11 @@
         <p>Enter your name to register:</p>
         <input type="text" id="playerNameInput" />
         <button onclick="registerName()">Register</button>
+        <button onclick="ready()">Ready</button>
+        <p>Player Names:</p>
+        <ul id="startPlayerList"></ul>
       </div>
+      <p id="timer-message" class="hidden">Game will start in 10 seconds...</p>
       <div id="game-content" class="hidden">
         <h1>Wonder Words Game</h1>
         <p>Description: <span id="desc"> </span></p>
@@ -134,6 +187,7 @@
         <p>Player Names:</p>
         <ul id="playerList"></ul>
         <p id="game-status"></p>
+        <p id="turn"></p>
       </div>
     </div>
   </body>
