@@ -51,7 +51,7 @@ def home():
 @socketio.on("connect")
 def handle_connect():
     player_id = request.sid
-    print("Player with ",player_id, " connected")
+    print("Client ID: ", player_id, " connected")
 
 # Note: Create a new ready socketio
 
@@ -60,9 +60,19 @@ def handle_connect():
 @socketio.on("register_name")
 def register_name(data):
     player_id = request.sid
+    if player_id not in players:
+        players[player_id] = {"name": None, "score": 0}
     players[player_id]["name"] = data["name"]
+    emit("update",get_game_data(player_id), room=player_id)
     emit("update_players", get_players_data(), broadcast=True)
 
+def get_game_data(player_id):
+    return {
+        "unrevealed_word": unrevealed_word,
+        "is_correct": None,
+        "score": players.get(player_id, {}).get("score", 0),
+        "desc": word["description"],
+    }
 
 def get_players_data():
     return {
@@ -92,7 +102,9 @@ def handle_guess_event(data):
     if is_correct:
         score_multiplier = 100 * word["word_entry"].lower().count(guess)
         player_data["score"] += score_multiplier
-        emit("update", get_game_data(player_id), room=player_id) # Bug here which cause update to all players
+        emit(
+            "update", get_game_data(player_id), room=player_id
+        )  # Bug here which cause update to all players
     else:
         emit("wrong", room=player_id)
 
@@ -100,16 +112,9 @@ def handle_guess_event(data):
         print(f"Word revealed: {word}")
         emit("win", room=player_id)
 
-    emit("update", get_game_data(player_id), broadcast=True) # Create a new type of update called updateAllPlayers
-
-
-def get_game_data(player_id):
-    return {
-        "unrevealed_word": unrevealed_word,
-        "is_correct": None,
-        "score": players.get(player_id, {}).get("score", 0),
-        "desc": word["description"],
-    }
+    emit(
+        "update", get_game_data(player_id), broadcast=True
+    )  # Create a new type of update called updateAllPlayers
 
 
 if __name__ == "__main__":
