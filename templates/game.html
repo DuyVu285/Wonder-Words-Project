@@ -30,6 +30,12 @@
       .ready.readyStatus {
         color: green;
       }
+
+      #playerList {
+        text-align: center;
+        margin: 0 auto; /* Center the player list horizontally */
+        padding: 0;
+      }
     </style>
     <link
       rel="stylesheet"
@@ -71,14 +77,14 @@
 
         countdownInterval = setInterval(function () {
           if (remainingTime > 0) {
-            console.log("Remaining Time:", remainingTime);
+            console.log("Game will start in ", remainingTime, " seconds...");
             document.getElementById("timer-message").textContent =
-              "Time Remaining: " + remainingTime + " seconds";
+              "Game will start in " + remainingTime + " seconds...";
             remainingTime--;
           } else {
             clearInterval(countdownInterval);
-            document.getElementById("timer-message").classList.add("hidden");
-            document.getElementById("game-content").classList.remove("hidden");
+            document.getElementById("timer-message").classList.toggle("hidden");
+            document.getElementById("game-content").classList.toggle("hidden");
             updateGameState(data);
             updateTurn(data);
           }
@@ -95,14 +101,16 @@
       function updateTurn(data) {
         var turnElement = document.getElementById("turn");
         var playerName = document.getElementById("playerName").textContent;
+        var guessPlayer = data.order[0];
+        var nextPlayer = data.order[1];
         var remainingTime = 10;
         turnElement.textContent =
           "Turn: " +
           (data.turn + 1) +
           " - " +
-          data.order[0] +
+          guessPlayer +
           "\nPlayer " +
-          data.order[0] +
+          guessPlayer +
           " Turn Time Remaining: " +
           remainingTime +
           " seconds";
@@ -113,18 +121,18 @@
             "Turn: " +
             (data.turn + 1) +
             " - " +
-            data.order[0] +
+            guessPlayer +
             "\nPlayer " +
-            data.order[0] +
+            guessPlayer +
             " Turn Time Remaining: " +
             remainingTime +
             " seconds";
 
           if (remainingTime === 0) {
             clearInterval(countdownInterval);
-            if (data.order[0].includes(playerName)) {
+            if (guessPlayer.includes(playerName)) {
               Toastify({
-                text: "Time out! Player " + data.order[1] + " Turn!",
+                text: "Time out! Player " + nextPlayer + " Turn!",
                 duration: 3000,
                 gravity: "top",
                 position: "right",
@@ -178,8 +186,8 @@
       function updateScore(data) {
         var playerName = document.getElementById("playerName").textContent;
         var playerScores = data.player_scores;
-        var scoreElement = document.getElementById("score");
         var playerIndex = data.player_names.indexOf(playerName);
+        var scoreElement = document.getElementById("score");
 
         if (playerIndex !== -1) {
           var score = playerScores[playerIndex];
@@ -214,6 +222,7 @@
 
           if (ready) {
             listItem.classList.add("ready");
+            readyStatus.classList.add("ready");
           }
 
           listItem.appendChild(readyStatus);
@@ -224,16 +233,14 @@
 
       function updatePlayersList(playerNames, playerScores) {
         var playerListElement = document.getElementById("playerList");
-        playerListElement.innerHTML = "";
-        playerNames.forEach(function (name, index) {
-          var listItem = document.createElement("li");
-          listItem.textContent = name + " - Score: " + playerScores[index];
-          playerListElement.appendChild(listItem);
-        });
+        playerListElement.innerHTML = playerNames
+          .map((name, index) => `${name} - Score: ${playerScores[index]}`)
+          .join("<br>");
       }
 
       // Game Condition
       socket.on("win", function (data) {
+        clearInterval(countdownInterval);
         console.log("Winning data received:", data);
 
         var winningPlayers = data.winning_players;
@@ -256,35 +263,55 @@
         if (isWinningPlayer) {
           document.getElementById("game-status").textContent =
             "Congratulations! You won the game!";
-          alert("Congratulations! You won the game!");
+          Toastify({
+            text: "Congratulations! You won the game!",
+            duration: 3000,
+            gravity: "top",
+            position: "right",
+            backgroundColor: "green",
+          }).showToast();
         } else if (isLosingPlayer) {
           document.getElementById("game-status").textContent =
             "Better luck next time!";
-          alert("Better luck next time!");
-        } else {
-          document.getElementById("game-status").textContent =
-            winningMessage + " " + losingMessage;
-          alert(winningMessage + "\n" + losingMessage);
-        }
-
-        // Hide input and button
-        var input = document.getElementById("guess-input");
-        var button = document.getElementById("guess-button");
-        input.classList.add("hidden");
-        button.classList.add("hidden");
-      });
-
-      socket.on("wrong", function (data) {
-        var playerName = document.getElementById("playerName").textContent;
-        if (data.order[1].includes(playerName)) {
           Toastify({
-            text: "Player " + data.order[0] + " Guessed Wrong. Your Turn!",
+            text: "Better luck next time!",
             duration: 3000,
             gravity: "top",
             position: "right",
             backgroundColor: "red",
           }).showToast();
-        } else if (data.order[0].includes(playerName)) {
+        } else {
+          document.getElementById("game-status").textContent =
+            winningMessage + " " + losingMessage;
+          Toastify({
+            text: winningMessage + "\n" + losingMessage,
+            duration: 3000,
+            gravity: "top",
+            position: "right",
+            backgroundColor: "red",
+          }).showToast();
+        }
+
+        // Hide input and button
+        var input = document.getElementById("guess-input");
+        var button = document.getElementById("guess-button");
+        input.classList.toggle("hidden");
+        button.classList.toggle("hidden");
+      });
+
+      socket.on("wrong", function (data) {
+        var playerName = document.getElementById("playerName").textContent;
+        var turnPlayer = data.order[1];
+        var wrongPlayer = data.order[0];
+        if (turnPlayer.includes(playerName)) {
+          Toastify({
+            text: "Player " + wrongPlayer + " Guessed Wrong. Your Turn!",
+            duration: 3000,
+            gravity: "top",
+            position: "right",
+            backgroundColor: "red",
+          }).showToast();
+        } else if (wrongPlayer.includes(playerName)) {
           Toastify({
             text: "Wrong Guess! Next Player!",
             duration: 3000,
@@ -294,7 +321,7 @@
           }).showToast();
         } else {
           Toastify({
-            text: "Player " + data.order[lastIndex] + " Guessed Wrong.",
+            text: "Player " + wrongPlayer + " Guessed Wrong.",
             duration: 3000,
             gravity: "top",
             position: "right",
@@ -316,6 +343,16 @@
       // Guess
       function sendGuess() {
         var guess = document.getElementById("guess-input").value;
+        if (guess.trim() === "") {
+          Toastify({
+            text: "Please enter a guess",
+            duration: 3000,
+            gravity: "top",
+            position: "right",
+            backgroundColor: "orange",
+          }).showToast();
+          return;
+        }
         socket.emit("guess", { guess: guess });
         document.getElementById("guess-input").value = "";
       }
@@ -342,7 +379,7 @@
         <button id="guess-button" onclick="sendGuess()">Guess</button>
         <p>Player Name: <span id="playerName"></span></p>
         <p>Current player Score: <span id="score"></span></p>
-        <p>Player Names:</p>
+        <p>Player Names - Scores:</p>
         <ul id="playerList"></ul>
         <p id="game-status"></p>
         <p id="turn"></p>

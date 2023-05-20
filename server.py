@@ -3,21 +3,29 @@ import random
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 
-
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-words = []
-word = ""
-unrevealed_word = ""
-players = {}
-registration_order = []
-turn = 0
-ready_statuses = {}
+WORD_LIST_FILE = "word_list.json"
+SERVER_URL = "http://localhost:5000"
+
+
+class GameState:
+    def __init__(self):
+        self.words = []
+        self.word = ""
+        self.unrevealed_word = ""
+        self.players = {}
+        self.registration_order = []
+        self.turn = 0
+        self.ready_statuses = {}
+
+
+game_state = GameState()
 
 
 def load_words():
-    with open("word_list.json") as f:
+    with open(WORD_LIST_FILE) as f:
         words = json.load(f)
     return words
 
@@ -56,106 +64,103 @@ def handle_connect():
     print("Client ID: ", request.sid, " connected")
 
 
-# Get player name
 @socketio.on("register_name")
 def register_name(data):
     player_id = request.sid
-    if player_id not in players:
-        players[player_id] = {"name": None, "score": 0}
-    players[player_id]["name"] = data["name"]
-    registration_order.append(data["name"])
-    ready_statuses[player_id] = False
+    if player_id not in game_state.players:
+        game_state.players[player_id] = {"name": None, "score": 0}
+    game_state.players[player_id]["name"] = data["name"]
+    game_state.registration_order.append(data["name"])
+    game_state.ready_statuses[player_id] = False
     emit("update_ready_players", get_players_ready_data(), broadcast=True)
 
 
-# Ready
 @socketio.on("ready")
 def ready():
     player_id = request.sid
-    ready_statuses[player_id] = True
+    game_state.ready_statuses[player_id] = True
     emit("update_ready_players", get_players_ready_data(), broadcast=True)
 
-    # Check if all players are ready
-    if len(ready_statuses) >= 2 and all(ready for ready in ready_statuses.values()):
+    if len(game_state.ready_statuses) >= 2 and all(
+        ready for ready in game_state.ready_statuses.values()
+    ):
         emit("start_timer", get_players_data(), broadcast=True)
-        ready_statuses.clear()
+        game_state.ready_statuses.clear()
 
 
 @socketio.on("guess")
 def handle_guess_event(data):
-    global word
-    global unrevealed_word
-    global turn
-
     player_id = request.sid
-    player_data = players.get(player_id, {})
+    player_data = game_state.players.get(player_id, {})
 
-    # Check if the player is the current turn player
-    if player_data.get("name") == registration_order[0]:
-        turn = turn + 1
+    if player_data.get("name") == game_state.registration_order[0]:
+        game_state.turn += 1
         guess = data["guess"].strip().lower()
-        unrevealed_word, is_correct = handle_guess(
-            guess, word["word_entry"], unrevealed_word
+        game_state.unrevealed_word, is_correct = handle_guess(
+            guess, game_state.word["word_entry"], game_state.unrevealed_word
         )
 
         if is_correct:
-            score_multiplier = 100 * word["word_entry"].lower().count(guess)
+            score_multiplier = 100 * game_state.word["word_entry"].lower().count(guess)
             player_data["score"] += score_multiplier
             emit("right", room=player_id)
         else:
             emit("wrong", get_players_data(), broadcast=True)
             handle_switch_player()
 
-        if "-" not in unrevealed_word:
-            print(f"Word revealed: {word}")
-            emit("win", get_players_data, broadcast=True)
-        
         emit("update_turn", get_players_data(), broadcast=True)
+
+        if "-" not in game_state.unrevealed_word:
+            print(f"Word revealed: {game_state.word}")
+            emit("win", get_players_data(), broadcast=True)
 
 
 @socketio.on("switch_player")
 def handle_switch_player():
-    global registration_order
-    global turn
-    turn = turn + 1
-    registration_order.append(registration_order.pop(0))
+    game_state.turn += 1
+    game_state.registration_order.append(game_state.registration_order.pop(0))
     emit("update_turn", get_players_data(), broadcast=True)
 
 
 def get_players_ready_data():
     return {
-        "player_names": [player["name"] for player in players.values()],
+        "player_names": [player["name"] for player in game_state.players.values()],
         "ready_statuses": [
-            ready_statuses.get(player_id, False) for player_id in players.keys()
+            game_state.ready_statuses.get(player_id, False)
+            for player_id in game_state.players.keys()
         ],
     }
 
 
 def get_players_data():
-    player_scores = [player["score"] for player in players.values()]
+    player_scores = [player["score"] for player in game_state.players.values()]
     max_score = max(player_scores)
     winning_players = [
-        player["name"] for player in players.values() if player["score"] == max_score
+        player["name"]
+        for player in game_state.players.values()
+        if player["score"] == max_score
     ]
     losing_players = [
-        player["name"] for player in players.values() if player["score"] != max_score
+        player["name"]
+        for player in game_state.players.values()
+        if player["score"] != max_score
     ]
 
     return {
-        "unrevealed_word": unrevealed_word,
-        "desc": word["description"],
-        "player_names": [player["name"] for player in players.values()],
+        "unrevealed_word": game_state.unrevealed_word,
+        "desc": game_state.word["description"],
+        "player_names": [player["name"] for player in game_state.players.values()],
         "player_scores": player_scores,
-        "order": registration_order,
-        "turn": turn,
+        "order": game_state.registration_order,
+        "turn": game_state.turn,
         "winning_players": winning_players,
         "losing_players": losing_players,
     }
 
 
 if __name__ == "__main__":
-    words = load_words()
-    word = select_word(words)
-    unrevealed_word = generate_unrevealed_word(word)
+    game_state.words = load_words()
+    game_state.word = select_word(game_state.words)
+    game_state.unrevealed_word = generate_unrevealed_word(game_state.word)
 
     socketio.run(app, debug=True)
