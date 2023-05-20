@@ -17,10 +17,24 @@
       .hidden {
         display: none;
       }
+
+      .readyStatus {
+        margin-left: 10px;
+        font-weight: bold;
+      }
+
+      .readyStatus:not(.ready) {
+        color: red;
+      }
+
+      .ready.readyStatus {
+        color: green;
+      }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.0/socket.io.js"></script>
     <script>
       var socket = io.connect("http://localhost:5000");
+      var countdownInterval = null;
       // -> Better add global value
       // Connect
       socket.on("connect", function (data) {
@@ -50,21 +64,18 @@
 
         var remainingTime = 5;
 
-        var countdownInterval = setInterval(function () {
+        countdownInterval = setInterval(function () {
           if (remainingTime > 0) {
             console.log("Remaining Time:", remainingTime);
             document.getElementById("timer-message").textContent =
               "Time Remaining: " + remainingTime + " seconds";
             remainingTime--;
           } else {
-            console.log("Timer finished. Game starting...");
             clearInterval(countdownInterval);
             document.getElementById("timer-message").classList.add("hidden");
             document.getElementById("game-content").classList.remove("hidden");
-            updateGameState(data.players_data);
-            updateScore(0);
-            updatePlayersList(data.players_data.player_names);
-            updateTurn(data.players_data);
+            updateGameState(data);
+            updateTurn(data);
           }
         }, 1000);
       });
@@ -72,56 +83,55 @@
       // Update playerList
       socket.on("update_ready_players", function (data) {
         console.log("Received players update:", data);
-        updateStartPlayersList(data.player_names);
+        updateStartPlayersList(data.player_names, data.ready_statuses);
       });
 
       // Update turn
       function updateTurn(data) {
         var turnElement = document.getElementById("turn");
+        var playerName = document.getElementById("playerName").textContent;
         var remainingTime = 10;
         turnElement.textContent =
           "Turn: " +
           (data.turn + 1) +
           " - " +
           data.order[0] +
-          " (Time Remaining: " +
+          "\nPlayer " +
+          data.order[0] +
+          " Turn Time Remaining: " +
           remainingTime +
-          " seconds)";
+          " seconds";
 
-        console.log("Correct", data.order[0].includes(playerName), playerName);
-        var playerName = document.getElementById("playerName").textContent;
+        countdownInterval = setInterval(function () {
+          remainingTime--;
+          turnElement.textContent =
+            "Turn: " +
+            (data.turn + 1) +
+            " - " +
+            data.order[0] +
+            "\nPlayer " +
+            data.order[0] +
+            " Turn Time Remaining: " +
+            remainingTime +
+            " seconds";
+
+          if (remainingTime === 0) {
+            clearInterval(countdownInterval);
+            if (data.order[0].includes(playerName)) {
+              alert("Time out! Player " + data.order[1] + " Turn!");
+              socket.emit("switch_player");
+            } else {
+              alert("Your Turn!");
+            }
+          }
+        }, 1000);
 
         if (data.order[0].includes(playerName)) {
-          console.log(playerName);
           document.getElementById("guess-input").disabled = false;
           document.getElementById("guess-button").disabled = false;
-          // Check if it's the current player's turn
-          var countdownInterval = setInterval(function () {
-            remainingTime--;
-            turnElement.textContent =
-              "Turn: " +
-              (data.turn + 1) +
-              " - " +
-              data.order[0] +
-              " (Time Remaining: " +
-              remainingTime +
-              " seconds)";
-
-            if (remainingTime === 0) {
-              clearInterval(countdownInterval);
-              alert("Time out! Next player!");
-
-              // Move the next index of data.order to index 0
-              var nextPlayer = data.order.shift();
-              data.order.push(nextPlayer);
-              updateTurn(data); // Should be a registration order emit back
-              // Refresh if receive again function.
-            }
-          }, 1000);
         } else {
           document.getElementById("guess-input").disabled = true;
           document.getElementById("guess-button").disabled = true;
-          updateGameState(data);
         }
       }
 
@@ -130,35 +140,34 @@
         socket.emit("ready");
       }
 
-      // Not Turn Alert
-      socket.on("not_turn", function () {
-        console.log("It's not your turn to guess!");
-        alert("It's not your turn to guess!");
-      });
-
-      // Update data
-      socket.on("update", function (data) {
-        console.log("Received update:", data);
-        updateGameState(data);
-        updateTurn(data);
-      });
-
       socket.on("update_turn", function (data) {
         console.log("Received turn update:", data);
+        if (countdownInterval) {
+          clearInterval(countdownInterval);
+          countdownInterval = null;
+        }
+        updateGameState(data);
         updateTurn(data);
-      });
-
-      socket.on("update_game_state", function (data) {
-        console.log("Received update:", data);
-        updateUnrevealedWord(data.unrevealed_word);
-        updateDesc(data.desc);
       });
 
       // Update Game State
       function updateGameState(data) {
         updateUnrevealedWord(data.unrevealed_word);
         updateDesc(data.desc);
-        updateScore(data.score);
+        updateScore(data);
+        updatePlayersList(data.player_names, data.player_scores);
+      }
+
+      function updateScore(data) {
+        var playerName = document.getElementById("playerName").textContent;
+        var playerScores = data.player_scores;
+        var scoreElement = document.getElementById("score");
+        var playerIndex = data.player_names.indexOf(playerName);
+
+        if (playerIndex !== -1) {
+          var score = playerScores[playerIndex];
+          scoreElement.textContent = score;
+        }
       }
 
       function updateUnrevealedWord(unrevealedWord) {
@@ -171,37 +180,75 @@
         descElement.textContent = desc;
       }
 
-      function updateScore(score) {
-        var scoreElement = document.getElementById("score");
-        scoreElement.textContent = score;
-      }
-
-      function updateStartPlayersList(playerNames) {
+      function updateStartPlayersList(playerNames, readyStatuses) {
         var playerListElement = document.getElementById("startPlayerList");
         playerListElement.innerHTML = "";
-        playerNames.forEach(function (name) {
+
+        for (var i = 0; i < playerNames.length; i++) {
+          var name = playerNames[i];
+          var ready = readyStatuses[i];
+
           var listItem = document.createElement("li");
           listItem.textContent = name;
+
+          var readyStatus = document.createElement("span");
+          readyStatus.textContent = ready ? "Ready" : "Not Ready";
+          readyStatus.classList.add("readyStatus");
+
+          if (ready) {
+            listItem.classList.add("ready");
+          }
+
+          listItem.appendChild(readyStatus);
+
           playerListElement.appendChild(listItem);
-        });
+        }
       }
 
-      function updatePlayersList(playerNames) {
+      function updatePlayersList(playerNames, playerScores) {
         var playerListElement = document.getElementById("playerList");
         playerListElement.innerHTML = "";
-        playerNames.forEach(function (name) {
+        playerNames.forEach(function (name, index) {
           var listItem = document.createElement("li");
-          listItem.textContent = name;
+          listItem.textContent = name + " - Score: " + playerScores[index];
           playerListElement.appendChild(listItem);
         });
       }
 
       // Game Condition
-      socket.on("win", function () {
-        console.log("You won the game!");
-        document.getElementById("game-status").textContent =
-          "Congratulations! You won the game!";
-        alert("Congratulations! You won the game!");
+      socket.on("win", function (data) {
+        console.log("Winning data received:", data);
+
+        var winningPlayers = data.winning_players;
+        var losingPlayers = data.losing_players;
+
+        // Check if the current player is a winning player
+        var playerName = document.getElementById("playerName").textContent;
+        var isWinningPlayer = winningPlayers.includes(playerName);
+        var isLosingPlayer = losingPlayers.includes(playerName);
+
+        var winningMessage =
+          "Congratulations to the winner(s): " + winningPlayers.join(", ");
+        var losingMessage =
+          "Better luck next time to: " + losingPlayers.join(", ");
+
+        console.log(winningMessage);
+        console.log(losingMessage);
+
+        // Display messages based on the player's own interface
+        if (isWinningPlayer) {
+          document.getElementById("game-status").textContent =
+            "Congratulations! You won the game!";
+          alert("Congratulations! You won the game!");
+        } else if (isLosingPlayer) {
+          document.getElementById("game-status").textContent =
+            "Better luck next time!";
+          alert("Better luck next time!");
+        } else {
+          document.getElementById("game-status").textContent =
+            winningMessage + " " + losingMessage;
+          alert(winningMessage + "\n" + losingMessage);
+        }
 
         // Hide input and button
         var input = document.getElementById("guess-input");
@@ -210,9 +257,19 @@
         button.classList.add("hidden");
       });
 
-      socket.on("wrong", function () {
-        document.getElementById("game-status").textContent = "Wrong Guess!";
-        alert("Wrong Guess! Next Player!");
+      socket.on("wrong", function (data) {
+        var playerName = document.getElementById("playerName").textContent;
+        if (data.order[1].includes(playerName)) {
+          alert("Player " + data.order[0] + " Guessed Wrong. Your Turn!");
+        } else if (data.order[0].includes(playerName)) {
+          alert("Wrong Guess! Next Player!");
+        } else {
+          alert("Player " + data.order[lastIndex] + " Guessed Worng.");
+        }
+      });
+
+      socket.on("right", function () {
+        alert("Right Guess!");
       });
 
       // Guess
@@ -234,7 +291,7 @@
         <p>Player Names:</p>
         <ul id="startPlayerList"></ul>
       </div>
-      <p id="timer-message" class="hidden">Game will start in 10 seconds...</p>
+      <p id="timer-message" class="hidden">Game will start in 5 seconds...</p>
       <div id="game-content" class="hidden">
         <h1>Wonder Words Game</h1>
         <p>Description: <span id="desc"> </span></p>

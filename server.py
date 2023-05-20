@@ -12,8 +12,8 @@ word = ""
 unrevealed_word = ""
 players = {}
 registration_order = []
-ready_players = 0
 turn = 0
+ready_statuses = {}
 
 
 def load_words():
@@ -64,34 +64,21 @@ def register_name(data):
         players[player_id] = {"name": None, "score": 0}
     players[player_id]["name"] = data["name"]
     registration_order.append(data["name"])
+    ready_statuses[player_id] = False
     emit("update_ready_players", get_players_ready_data(), broadcast=True)
-
-
-def get_players_ready_data():
-    return {
-        "player_names": [player["name"] for player in players.values()],
-    }
 
 
 # Ready
 @socketio.on("ready")
 def ready():
-    global ready_players
-    ready_players += 1
-    if ready_players >= 2 and ready_players == len(players):
-        emit("start_timer", {"players_data": get_players_data()}, broadcast=True)
-        ready_players = 0
+    player_id = request.sid
+    ready_statuses[player_id] = True
+    emit("update_ready_players", get_players_ready_data(), broadcast=True)
 
-
-def get_players_data():
-    return {
-        "unrevealed_word": unrevealed_word,
-        "desc": word["description"],
-        "player_names": [player["name"] for player in players.values()],
-        "player_scores": [player["score"] for player in players.values()],
-        "order": registration_order,
-        "turn": turn,
-    }
+    # Check if all players are ready
+    if len(ready_statuses) >= 2 and all(ready for ready in ready_statuses.values()):
+        emit("start_timer", get_players_data(), broadcast=True)
+        ready_statuses.clear()
 
 
 @socketio.on("guess")
@@ -105,6 +92,7 @@ def handle_guess_event(data):
 
     # Check if the player is the current turn player
     if player_data.get("name") == registration_order[0]:
+        turn = turn + 1
         guess = data["guess"].strip().lower()
         unrevealed_word, is_correct = handle_guess(
             guess, word["word_entry"], unrevealed_word
@@ -112,29 +100,56 @@ def handle_guess_event(data):
 
         if "-" not in unrevealed_word:
             print(f"Word revealed: {word}")
-            emit("win", room=player_id)
+            emit("win", get_players_data, broadcast=True)
 
         if is_correct:
             score_multiplier = 100 * word["word_entry"].lower().count(guess)
             player_data["score"] += score_multiplier
-            emit("update", get_game_data(player_id), room=player_id)
+            emit("right", get_players_data(), room=player_id)
         else:
-            registration_order.append(registration_order.pop(0))
-            emit("wrong", room=player_id)
+            emit("wrong", get_players_data(), broadcast=True)
+            handle_switch_player()
 
-        emit("update_game_state", get_players_data(), broadcast=True)
-        turn = turn + 1
         emit("update_turn", get_players_data(), broadcast=True)
-    else:
-        emit("not_turn", room=player_id)
 
 
-def get_game_data(player_id):
+@socketio.on("switch_player")
+def handle_switch_player():
+    global registration_order
+    global turn
+    turn = turn + 1
+    registration_order.append(registration_order.pop(0))
+    emit("update_turn", get_players_data(), broadcast=True)
+
+
+def get_players_ready_data():
+    return {
+        "player_names": [player["name"] for player in players.values()],
+        "ready_statuses": [
+            ready_statuses.get(player_id, False) for player_id in players.keys()
+        ],
+    }
+
+
+def get_players_data():
+    player_scores = [player["score"] for player in players.values()]
+    max_score = max(player_scores)
+    winning_players = [
+        player["name"] for player in players.values() if player["score"] == max_score
+    ]
+    losing_players = [
+        player["name"] for player in players.values() if player["score"] != max_score
+    ]
+
     return {
         "unrevealed_word": unrevealed_word,
-        "score": players.get(player_id, {}).get("score", 0),
-        "turn": turn,
+        "desc": word["description"],
+        "player_names": [player["name"] for player in players.values()],
+        "player_scores": player_scores,
         "order": registration_order,
+        "turn": turn,
+        "winning_players": winning_players,
+        "losing_players": losing_players,
     }
 
 
