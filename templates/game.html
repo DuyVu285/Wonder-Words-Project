@@ -21,7 +21,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.0/socket.io.js"></script>
     <script>
       var socket = io.connect("http://localhost:5000");
-
+      // -> Better add global value
       // Connect
       socket.on("connect", function (data) {
         console.log("Connected to the server");
@@ -35,9 +35,10 @@
         updatePlayerName(playerName);
       }
 
-      // Ready check
-      function ready() {
-        socket.emit("ready");
+      // Update PlayerName
+      function updatePlayerName(playerName) {
+        var playerNameElement = document.getElementById("playerName");
+        playerNameElement.textContent = playerName;
       }
 
       // Timer
@@ -47,15 +48,92 @@
         document.getElementById("game-content").classList.add("hidden");
         document.getElementById("timer-message").classList.remove("hidden");
 
-        setTimeout(function () {
-          console.log("Timer finished. Game starting...");
-          document.getElementById("timer-message").classList.add("hidden");
-          document.getElementById("game-content").classList.remove("hidden");
+        var remainingTime = 5;
+
+        var countdownInterval = setInterval(function () {
+          if (remainingTime > 0) {
+            console.log("Remaining Time:", remainingTime);
+            document.getElementById("timer-message").textContent =
+              "Time Remaining: " + remainingTime + " seconds";
+            remainingTime--;
+          } else {
+            console.log("Timer finished. Game starting...");
+            clearInterval(countdownInterval);
+            document.getElementById("timer-message").classList.add("hidden");
+            document.getElementById("game-content").classList.remove("hidden");
+            updateGameState(data.players_data);
+            updateScore(0);
+            updatePlayersList(data.players_data.player_names);
+            updateTurn(data.players_data);
+          }
+        }, 1000);
+      });
+
+      // Update playerList
+      socket.on("update_ready_players", function (data) {
+        console.log("Received players update:", data);
+        updateStartPlayersList(data.player_names);
+      });
+
+      // Update turn
+      function updateTurn(data) {
+        var turnElement = document.getElementById("turn");
+        var remainingTime = 10;
+        turnElement.textContent =
+          "Turn: " +
+          (data.turn + 1) +
+          " - " +
+          data.order[0] +
+          " (Time Remaining: " +
+          remainingTime +
+          " seconds)";
+
+        console.log("Correct", data.order[0].includes(playerName), playerName);
+        var playerName = document.getElementById("playerName").textContent;
+
+        if (data.order[0].includes(playerName)) {
+          console.log(playerName);
+          document.getElementById("guess-input").disabled = false;
+          document.getElementById("guess-button").disabled = false;
+          // Check if it's the current player's turn
+          var countdownInterval = setInterval(function () {
+            remainingTime--;
+            turnElement.textContent =
+              "Turn: " +
+              (data.turn + 1) +
+              " - " +
+              data.order[0] +
+              " (Time Remaining: " +
+              remainingTime +
+              " seconds)";
+
+            if (remainingTime === 0) {
+              clearInterval(countdownInterval);
+              alert("Time out! Next player!");
+
+              // Move the next index of data.order to index 0
+              var nextPlayer = data.order.shift();
+              data.order.push(nextPlayer);
+              updateTurn(data); // Should be a registration order emit back
+              // Refresh if receive again function.
+            }
+          }, 1000);
+        } else {
+          document.getElementById("guess-input").disabled = true;
+          document.getElementById("guess-button").disabled = true;
           updateGameState(data);
-          updateTurn(data);
-          updateScore(0);
-          updatePlayersList(data.player_names);
-        }, 3000);
+        }
+      }
+
+      // Ready check
+      function ready() {
+        socket.emit("ready");
+      }
+
+      // Not Turn Alert
+      socket.on("not_turn", function () {
+        console.log("It's not your turn to guess!");
+        alert("It's not your turn to guess!");
       });
 
       // Update data
@@ -69,12 +147,6 @@
         console.log("Received turn update:", data);
         updateTurn(data);
       });
-
-      function updateTurn(data) {
-        var turnElement = document.getElementById("turn");
-        turnElement.textContent =
-          "Turn: " + (data.turn + 1) + " - " + data.order;
-      }
 
       socket.on("update_game_state", function (data) {
         console.log("Received update:", data);
@@ -104,12 +176,6 @@
         scoreElement.textContent = score;
       }
 
-      // Update playerList
-      socket.on("update_ready_players", function (data) {
-        console.log("Received players update:", data);
-        updateStartPlayersList(data.player_names);
-      });
-
       function updateStartPlayersList(playerNames) {
         var playerListElement = document.getElementById("startPlayerList");
         playerListElement.innerHTML = "";
@@ -128,12 +194,6 @@
           listItem.textContent = name;
           playerListElement.appendChild(listItem);
         });
-      }
-
-      // Update PlayerName
-      function updatePlayerName(playerName) {
-        var playerNameElement = document.getElementById("playerName");
-        playerNameElement.textContent = playerName;
       }
 
       // Game Condition
