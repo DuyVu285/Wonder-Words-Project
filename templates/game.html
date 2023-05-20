@@ -31,6 +31,11 @@
         color: green;
       }
     </style>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.0/socket.io.js"></script>
     <script>
       var socket = io.connect("http://localhost:5000");
@@ -118,10 +123,22 @@
           if (remainingTime === 0) {
             clearInterval(countdownInterval);
             if (data.order[0].includes(playerName)) {
-              alert("Time out! Player " + data.order[1] + " Turn!");
+              Toastify({
+                text: "Time out! Player " + data.order[1] + " Turn!",
+                duration: 3000,
+                gravity: "top",
+                position: "right",
+                backgroundColor: "red",
+              }).showToast();
               socket.emit("switch_player");
             } else {
-              alert("Your Turn!");
+              Toastify({
+                text: "Your Turn!",
+                duration: 3000,
+                gravity: "top",
+                position: "right",
+                backgroundColor: "green",
+              }).showToast();
             }
           }
         }, 1000);
@@ -260,16 +277,40 @@
       socket.on("wrong", function (data) {
         var playerName = document.getElementById("playerName").textContent;
         if (data.order[1].includes(playerName)) {
-          alert("Player " + data.order[0] + " Guessed Wrong. Your Turn!");
+          Toastify({
+            text: "Player " + data.order[0] + " Guessed Wrong. Your Turn!",
+            duration: 3000,
+            gravity: "top",
+            position: "right",
+            backgroundColor: "red",
+          }).showToast();
         } else if (data.order[0].includes(playerName)) {
-          alert("Wrong Guess! Next Player!");
+          Toastify({
+            text: "Wrong Guess! Next Player!",
+            duration: 3000,
+            gravity: "top",
+            position: "right",
+            backgroundColor: "red",
+          }).showToast();
         } else {
-          alert("Player " + data.order[lastIndex] + " Guessed Worng.");
+          Toastify({
+            text: "Player " + data.order[lastIndex] + " Guessed Wrong.",
+            duration: 3000,
+            gravity: "top",
+            position: "right",
+            backgroundColor: "red",
+          }).showToast();
         }
       });
 
       socket.on("right", function () {
-        alert("Right Guess!");
+        Toastify({
+          text: "Right Guess!",
+          duration: 3000,
+          gravity: "top",
+          position: "right",
+          backgroundColor: "green",
+        }).showToast();
       });
 
       // Guess

@@ -98,18 +98,18 @@ def handle_guess_event(data):
             guess, word["word_entry"], unrevealed_word
         )
 
-        if "-" not in unrevealed_word:
-            print(f"Word revealed: {word}")
-            emit("win", get_players_data, broadcast=True)
-
         if is_correct:
             score_multiplier = 100 * word["word_entry"].lower().count(guess)
             player_data["score"] += score_multiplier
-            emit("right", get_players_data(), room=player_id)
+            emit("right", room=player_id)
         else:
             emit("wrong", get_players_data(), broadcast=True)
             handle_switch_player()
 
+        if "-" not in unrevealed_word:
+            print(f"Word revealed: {word}")
+            emit("win", get_players_data, broadcast=True)
+        
         emit("update_turn", get_players_data(), broadcast=True)
 
 
