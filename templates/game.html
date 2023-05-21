@@ -55,6 +55,24 @@
       // Register Name
       function registerName() {
         var playerName = document.getElementById("playerNameInput").value;
+
+        if (playerName.trim() === "") {
+          Toastify({
+            text: "Please enter a valid name",
+            duration: 3000,
+            gravity: "top",
+            position: "right",
+            backgroundColor: "red",
+          }).showToast();
+          return;
+        }
+        Toastify({
+          text: "Registration Completed",
+          duration: 3000,
+          gravity: "top",
+          position: "right",
+          backgroundColor: "Green",
+        }).showToast();
         socket.emit("register_name", { name: playerName });
         document.getElementById("playerNameInput").value = "";
         updatePlayerName(playerName);
@@ -369,7 +387,7 @@
         <p>Player Names:</p>
         <ul id="startPlayerList"></ul>
       </div>
-      <p id="timer-message" class="hidden">Game will start in 5 seconds...</p>
+      <p id="timer-message" class="hidden"></p>
       <div id="game-content" class="hidden">
         <h1>Wonder Words Game</h1>
         <p>Description: <span id="desc"> </span></p>
