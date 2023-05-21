@@ -157,13 +157,21 @@
                 backgroundColor: "red",
               }).showToast();
               socket.emit("switch_player");
-            } else {
+            } else if (nextPlayer.includes(playerName)) {
               Toastify({
                 text: "Your Turn!",
                 duration: 3000,
                 gravity: "top",
                 position: "right",
                 backgroundColor: "green",
+              }).showToast();
+            } else {
+              Toastify({
+                text: "Player " + nextPlayer + " Turn!",
+                duration: 3000,
+                gravity: "top",
+                position: "right",
+                backgroundColor: "orange",
               }).showToast();
             }
           }
@@ -387,7 +395,7 @@
         <p>Player Names:</p>
         <ul id="startPlayerList"></ul>
       </div>
-      <p id="timer-message" class="hidden">"Game will start in 5 seconds..."</p>
+      <p id="timer-message" class="hidden">Game will start in 5 seconds...</p>
       <div id="game-content" class="hidden">
         <h1>Wonder Words Game</h1>
         <p>Description: <span id="desc"> </span></p>
